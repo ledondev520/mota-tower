@@ -8,6 +8,7 @@
 
 ## 立即游玩
 
+- **线上**：<https://ledondev520.github.io/mota-tower/>（GitHub Pages）
 - **本地**：直接双击 `index.html`（离线可玩，无需构建）；
   或 `npm run dev` 后访问 <http://localhost:8123>。
 - **键位**：方向键 / WASD 移动（可长按）· M 怪物手册 · J 楼层传送 ·

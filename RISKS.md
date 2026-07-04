@@ -11,3 +11,4 @@
 | R5 | localStorage 不可用（隐私模式） | 无痕窗口存档失败 | save() 已 try/catch 并提示"存档失败"，游戏本体不受影响 | — |
 | R6 | 触屏无键盘 | 手机访问 | `(pointer: coarse)` 自动显示屏幕方向键，支持长按连走 | — |
 | R7 | 浏览器自动化测试遗留数据 | 实测产生的存档污染玩家首次体验 | 已在测试收尾清空 `mota_*` localStorage（且部署域与本地域隔离，线上无此问题） | — |
+| R8 | Vercel CLI 无登录凭据 | `vercel deploy` 进入设备授权流程，需人工登录 | **降级执行**：改用已登录的 GitHub CLI 部署 GitHub Pages（https://ledondev520.github.io/mota-tower/），线上已实测可玩；若仍需 Vercel，运行 `vercel login` 后在项目目录执行 `vercel deploy --prod -y` 即可 | GitHub Pages 已可用 |

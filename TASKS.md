@@ -14,8 +14,8 @@
 | T8 | `js/ui.js` + `js/audio.js` + `index.html` + `style.css` | 50m | DONE | 完整 UI 可玩 |
 | T9 | 浏览器实测（自动通关 + 交互抽测 + 截图证据） | 30m | DONE | RESULTS/01–08 截图 |
 | T10 | 文档：README / RISKS / METRICS / RESULTS | 20m | DONE | 文档齐备 |
-| T11 | Vercel 部署 + 线上验证 | 10m | DOING | 线上 URL 可玩 |
-| T12 | interactive_feedback 收集反馈 | 5m | TODO | 已调用 |
+| T11 | 线上部署 + 验证（Vercel 未登录 → 改用 GitHub Pages，见 RISKS R8） | 10m | DONE | https://ledondev520.github.io/mota-tower/ 实测可玩 |
+| T12 | interactive_feedback 收集反馈 | 5m | DOING | 已调用 |
 
 ## 执行备注
 
