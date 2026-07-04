@@ -12,3 +12,5 @@
 | R6 | 触屏无键盘 | 手机访问 | `(pointer: coarse)` 自动显示屏幕方向键，支持长按连走 | — |
 | R7 | 浏览器自动化测试遗留数据 | 实测产生的存档污染玩家首次体验 | 已在测试收尾清空 `mota_*` localStorage（且部署域与本地域隔离，线上无此问题） | — |
 | R8 | Vercel CLI 无登录凭据 | `vercel deploy` 进入设备授权流程，需人工登录 | **降级执行**：改用已登录的 GitHub CLI 部署 GitHub Pages（https://ledondev520.github.io/mota-tower/），线上已实测可玩；若仍需 Vercel，运行 `vercel login` 后在项目目录执行 `vercel deploy --prod -y` 即可 | GitHub Pages 已可用 |
+| R9 | Pages 自动部署工作流偶发失败 | push 后 `pages build and deployment` 在 deploy 步骤报"Deployment failed, try again later"（GitHub 服务端瞬时故障，重跑同样失败） | **已验证的绕行**：`gh api -X POST repos/<owner>/<repo>/pages/builds` 强制触发 legacy 构建，20 秒内 built 并上线；push 后若线上未更新按此处理 | 线上保留上一成功版本，无停机 |
+| R10 | 存档码被手工篡改或截断 | 导入非法/损坏的码 | savecode 解码失败即 reject，引擎 hydrate 校验 hero/pos 缺失抛错，UI toast"导入失败"，不影响当前进度 | 现有 localStorage 存档不受影响 |
