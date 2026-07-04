@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!--
+  index.html — 魔塔 · Mota 入口页
+  Input : style.css 与 js/ 下全部脚本（普通 script，双击本文件即可离线游玩）
+  Output: 三个场景（标题/游戏/结局）的 DOM 骨架
+  Pos   : 应用唯一入口页；结构变化时同步更新根 README。
+  我被更新时，必须同步更新本头注释 + 根目录 README。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>魔塔 · Mota — 15 层经典数值魔塔</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23231d2e'/><rect x='4' y='2' width='8' height='12' fill='%23f4b41b'/><rect x='6' y='6' width='4' height='8' fill='%23231d2e'/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 场景：标题 -->
+  <section id="scene-title" class="scene">
+    <div class="title-box">
+      <canvas id="title-hero" class="pixel"></canvas>
+      <h1>魔　塔</h1>
+      <p class="subtitle">MOTA · 十五层 · 经典数值复刻</p>
+      <div class="title-btns">
+        <button id="btn-start" class="big-btn">新的冒险</button>
+        <button id="btn-continue" class="big-btn">继续冒险</button>
+      </div>
+      <div class="help">
+        <p>魔王掳走了公主，囚于塔顶第 15 层。拿起剑与盾，一层层爬上去吧。</p>
+        <p class="dim">移动 方向键 / WASD　·　M 怪物手册　·　J 楼层传送　·　K 存档　L 读档　·　T 伤害预览</p>
+        <p class="dim">战斗为确定性数值：勇士先手，伤害 = 攻击 − 对方防御。量力而行，宝石优先。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 场景：游戏 -->
+  <section id="scene-game" class="scene hidden">
+    <div id="toast"></div>
+    <div class="game-layout">
+      <aside class="hud">
+        <div class="hud-floor-badge"><span id="hud-floor">塔 1 层</span></div>
+        <dl class="hud-stats">
+          <div class="stat hp"><dt>生命</dt><dd id="hud-hp">1000</dd></div>
+          <div class="stat atk"><dt>攻击</dt><dd id="hud-atk">10</dd></div>
+          <div class="stat def"><dt>防御</dt><dd id="hud-def">10</dd></div>
+          <div class="stat gold"><dt>金币</dt><dd id="hud-gold">0</dd></div>
+        </dl>
+        <div class="hud-keys">
+          <span class="key-chip ky">黄 <b id="hud-ky">0</b></span>
+          <span class="key-chip kb">蓝 <b id="hud-kb">0</b></span>
+          <span class="key-chip kr">红 <b id="hud-kr">0</b></span>
+        </div>
+        <div class="hud-btns">
+          <button id="btn-manual">怪物手册 (M)</button>
+          <button id="btn-fly">楼层传送 (J)</button>
+          <button id="btn-save">存档 (K)</button>
+          <button id="btn-load">读档 (L)</button>
+          <button id="btn-dmg">伤害预览:开</button>
+          <button id="btn-mute">音效:开</button>
+          <button id="btn-restart" class="danger">重新开始</button>
+        </div>
+        <div class="dpad">
+          <button id="dpad-up">▲</button>
+          <div class="dpad-mid">
+            <button id="dpad-left">◀</button>
+            <button id="dpad-right">▶</button>
+          </div>
+          <button id="dpad-down">▼</button>
+        </div>
+      </aside>
+      <div id="map-wrap">
+        <canvas id="map" class="pixel"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- 场景：结局 -->
+  <section id="scene-end" class="scene hidden">
+    <div class="title-box">
+      <h1 id="end-title">通关！</h1>
+      <div id="end-stats"></div>
+      <div class="title-btns">
+        <button id="btn-end-restart" class="big-btn">再来一局</button>
+        <button id="btn-end-title" class="big-btn">回到标题</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/formulas.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

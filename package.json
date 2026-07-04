@@ -1,0 +1,11 @@
+{
+  "name": "mota-tower",
+  "version": "1.0.0",
+  "description": "魔塔 · Mota — 15 层经典数值魔塔（零依赖纯静态网页游戏）",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "check": "node tools/balance_check.mjs",
+    "dev": "python3 -m http.server 8123"
+  }
+}
