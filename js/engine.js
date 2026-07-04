@@ -1,12 +1,13 @@
 /**
  * engine.js — 游戏引擎（状态机与规则执行，不含渲染）
  *
- * Input : MOTA_DATA（数据）、MOTA_FORMULAS（战斗公式）
- * Output: 全局对象 MOTA_ENGINE = { newGame, moveHero, useStairs, flyTo,
- *         buyShop, save, load, listSaves, state, EV }
+ * Input : MOTA_DATA（数据）、MOTA_FORMULAS（战斗公式）、MOTA_SAVECODE（存档编解码）
+ * Output: 全局对象 MOTA_ENGINE = { newGame, moveHero, useStairs, flyTo, buyShop,
+ *         save, load, loadLatest, latestSave, listSaves, exportSave, importSave, EV }
  *         引擎通过事件回调（onEvent）向 ui.js 推送一切可见变化。
  * Pos   : 局部系统的"规则中枢"——所有玩法规则（移动/战斗/门钥匙/拾取/
  *         商店/NPC/存档）唯一执行点；UI 只做展示与输入转发。
+ *         存档为 v2 差异式（仅存与初始地图不同的格子），兼容读取 v1 全量档。
  * 我被更新时，必须同步更新本头注释 + 所属目录 README/INDEX。
  */
 (function (root) {
@@ -14,6 +15,7 @@
 
   var D = root.MOTA_DATA;
   var F = root.MOTA_FORMULAS;
+  var SC = root.MOTA_SAVECODE;
 
   /** 事件类型枚举（UI 依据 type 渲染表现）。 */
   var EV = {
@@ -35,6 +37,14 @@
     return D.FLOORS.map(function (fl) {
       return fl.map.map(function (r) { return r.trim().split(/\s+/); });
     });
+  }
+
+  var pristineCache = null; // 初始地图（只读基准，用于差异式存档）
+
+  /** 职责：取初始地图基准（惰性解析一次，勿修改返回值）。 */
+  function pristine() {
+    if (!pristineCache) pristineCache = parseGrids();
+    return pristineCache;
   }
 
   /** 职责：在某层矩阵中定位令牌。返回 {x,y} 或 null。 */
@@ -142,6 +152,7 @@
         hero.atk += info.atk; hero.def += info.def;
         clearCell(state.floor, nx, ny);
         state.pos = { x: nx, y: ny };
+        autosave();
         emit(EV.PICKUP, {
           name: info.name,
           detail: (info.atk ? "攻击 +" + info.atk : "") + (info.def ? "防御 +" + info.def : ""),
@@ -153,6 +164,7 @@
         if (hero.keys[info.color] > 0) {
           hero.keys[info.color]--;
           clearCell(state.floor, nx, ny);
+          autosave();
           emit(EV.DOOR, { color: info.color });
         } else {
           emit(EV.TOAST, { text: "需要" + { y: "黄", b: "蓝", r: "红" }[info.color] + "钥匙", warn: true });
@@ -198,6 +210,7 @@
     hero.gold += m.gold;
     clearCell(state.floor, x, y);
     if (tok === "bo") state.flags.bossDead = true;
+    autosave();
     emit(EV.BATTLE, {
       monster: tok, name: m.name, damage: p.damage, rounds: p.rounds,
       gold: m.gold, at: { x: x, y: y },
@@ -220,6 +233,7 @@
     if (npc.reward === "manual") state.flags.manual = true;
     if (npc.reward === "wand") state.flags.wand = true;
     if (npc.vanish) clearCell(state.floor, x, y);
+    autosave();
     emit(EV.DIALOG, { npc: id, lines: npc.lines, reward: npc.reward });
   }
 
@@ -280,6 +294,7 @@
     } else {
       hero.keys[opt.key]++;
     }
+    autosave();
     emit(EV.PICKUP, { name: opt.label, detail: "-" + price + " 金币" });
     return true;
   }
@@ -287,16 +302,34 @@
   // ─────────────────────────── 存档 ───────────────────────────
 
   var SAVE_PREFIX = "mota_save_";
+  var SLOTS = ["auto", "1", "2", "3"];
 
-  /** 职责：序列化当前状态（grids 全量存储，体积 ~15KB 可接受）。 */
+  /**
+   * 职责：序列化当前状态为 v2 差异式 JSON（仅存被改变的格子，约 1~5KB）。
+   * 思路：地图用 SC.buildDiff 对比初始基准；其余面板/旗标全量存。
+   */
   function snapshot() {
     return JSON.stringify({
-      version: state.version, hero: state.hero, grids: state.grids,
+      v: 2, hero: state.hero,
+      diff: SC.buildDiff(pristine(), state.grids),
       floor: state.floor, pos: state.pos, dir: state.dir,
       visited: state.visited, flags: state.flags,
       shopCount: state.shopCount, steps: state.steps,
       startedAt: state.startedAt, savedAt: Date.now(),
     });
+  }
+
+  /**
+   * 职责：把存档对象水合为运行时状态（v2 差异式重建地图；兼容 v1 全量档）。
+   * 参数：s 反序列化后的存档对象。异常由调用方捕获。
+   */
+  function hydrate(s) {
+    if (!s || !s.hero || !s.pos) throw new Error("存档内容不完整");
+    if (!s.grids) {
+      s.grids = SC.applyDiff(pristine(), s.diff || {});
+      delete s.diff;
+    }
+    state = s;
   }
 
   /** 职责：写入存档槽。参数：slot "auto"|"1"|"2"|"3"。返回是否成功。 */
@@ -312,7 +345,7 @@
     }
   }
 
-  /** 职责：换层自动存档（静默）。 */
+  /** 职责：自动存档（换层/战斗/开门/装备/购买/NPC 后静默写 auto 槽）。 */
   function autosave() { save("auto"); }
 
   /** 职责：从存档槽恢复。返回是否成功。 */
@@ -320,8 +353,7 @@
     var raw = localStorage.getItem(SAVE_PREFIX + slot);
     if (!raw) { emit(EV.TOAST, { text: "该槽位没有存档", warn: true }); return false; }
     try {
-      var s = JSON.parse(raw);
-      state = s;
+      hydrate(JSON.parse(raw));
       emit(EV.REFRESH, { reason: "load" });
       emit(EV.TOAST, { text: "读档成功" });
       return true;
@@ -333,7 +365,7 @@
 
   /** 职责：列出各槽位存档元信息（供存读档界面展示）。 */
   function listSaves() {
-    return ["auto", "1", "2", "3"].map(function (slot) {
+    return SLOTS.map(function (slot) {
       var raw = localStorage.getItem(SAVE_PREFIX + slot);
       if (!raw) return { slot: slot, empty: true };
       try {
@@ -349,6 +381,46 @@
     });
   }
 
+  /** 职责：取最新一次存档的元信息（含槽位名），无存档返回 null。 */
+  function latestSave() {
+    var best = null;
+    listSaves().forEach(function (s) {
+      if (!s.empty && (!best || (s.savedAt || 0) > (best.savedAt || 0))) best = s;
+    });
+    return best;
+  }
+
+  /** 职责：读取最新存档（"继续冒险"入口）。返回是否成功。 */
+  function loadLatest() {
+    var best = latestSave();
+    if (!best) { emit(EV.TOAST, { text: "还没有任何存档", warn: true }); return false; }
+    return load(best.slot);
+  }
+
+  /**
+   * 职责：导出当前进度为跨浏览器存档码。
+   * 返回值：Promise<string>；无对局时 reject。
+   */
+  function exportSave() {
+    if (!state) return Promise.reject(new Error("当前没有进行中的冒险"));
+    return SC.encode(snapshot());
+  }
+
+  /**
+   * 职责：导入存档码并立即进入该进度（同时写入 auto 槽持久化）。
+   * 参数：code 存档码字符串。
+   * 返回值：Promise<boolean>；格式/内容非法时 reject。
+   */
+  function importSave(code) {
+    return SC.decode(code).then(function (json) {
+      hydrate(JSON.parse(json));
+      autosave();
+      emit(EV.REFRESH, { reason: "import" });
+      emit(EV.TOAST, { text: "存档导入成功：" + D.FLOORS[state.floor].name });
+      return true;
+    });
+  }
+
   root.MOTA_ENGINE = {
     EV: EV,
     newGame: newGame,
@@ -358,7 +430,11 @@
     buyShop: buyShop,
     save: save,
     load: load,
+    loadLatest: loadLatest,
+    latestSave: latestSave,
     listSaves: listSaves,
+    exportSave: exportSave,
+    importSave: importSave,
     cellInfo: cellInfo,
     setOnEvent: function (fn) { onEvent = fn; },
     getState: function () { return state; },

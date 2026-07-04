@@ -2,8 +2,9 @@
  * style.css — 魔塔界面样式（暗色石塔主题）
  *
  * Input : index.html 的 DOM 结构
- * Output: 三场景布局、HUD、弹窗、动效
+ * Output: 三场景布局、HUD、弹窗、动效、触屏操控区（摇杆/方向键）与移动端紧凑布局
  * Pos   : 表现层视觉规范；类名与 ui.js 强耦合，改名需双向同步。
+ *         桌面(>900px 且精确指针)隐藏触屏操控区；触屏或窄屏显示。
  * 我被更新时，必须同步更新本头注释 + 根目录 README。
  */
 
@@ -33,6 +34,8 @@ body {
   color: var(--text);
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 .pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
@@ -73,7 +76,9 @@ body {
 
 .subtitle { margin-top: 10px; color: var(--dim); letter-spacing: 4px; }
 
-.title-btns { margin: 30px 0 22px; display: flex; gap: 16px; justify-content: center; }
+.title-btns { margin: 30px 0 14px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+#continue-meta { font-size: 12px; min-height: 18px; margin-bottom: 14px; }
 
 .big-btn {
   font-size: 18px;
@@ -89,6 +94,8 @@ body {
 .big-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
 
 .big-btn.locked { opacity: 0.35; pointer-events: none; }
+
+.big-btn.ghost { background: transparent; color: var(--dim); }
 
 .help { font-size: 13px; line-height: 1.9; }
 
@@ -207,29 +214,168 @@ body {
 
 .hud-btns button.danger { grid-column: 1 / -1; color: var(--bad); }
 
-/* 触屏方向键 */
-.dpad { display: none; flex-direction: column; align-items: center; gap: 6px; }
+/* ───────────── 触屏操控区（摇杆 / 方向键 / 快捷键） ───────────── */
 
-.dpad-mid { display: flex; gap: 52px; }
+#controls {
+  display: none;               /* 触屏或窄屏时显示，见下方媒体查询 */
+  width: min(96vw, 624px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 6px 10px calc(10px + env(safe-area-inset-bottom));
+  touch-action: none;          /* 操控区内禁用浏览器手势，防误滚动 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
-.dpad button {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
+/* 摇杆：外环 + 随指头移动的杆头 */
+#joystick {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #2f2742 0%, #231d2e 68%);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 4px 18px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+}
+
+#joy-ring {
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  border: 1px dashed rgba(154, 143, 168, 0.35);
+  pointer-events: none;
+}
+
+#joy-thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, #4a3d6b, #372e4a);
+  border: 1px solid #55496e;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: transform 0.09s ease-out;
+}
+
+#joy-thumb.active { transition: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65); }
+
+/* 方向键：3×3 十字布局 */
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+  gap: 5px;
+}
+
+.pad-btn {
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel-2);
   color: var(--text);
-  font-size: 18px;
+  font-size: 19px;
+  touch-action: none;
 }
 
-@media (pointer: coarse) {
-  .dpad { display: flex; }
+.pad-btn:active { background: #4a3d6b; }
+
+.pad-dot { opacity: 0.25; pointer-events: none; }
+
+#dpad-up { grid-area: 1 / 2; }
+#dpad-left { grid-area: 2 / 1; }
+#dpad-center { grid-area: 2 / 2; }
+#dpad-right { grid-area: 2 / 3; }
+#dpad-down { grid-area: 3 / 2; }
+
+/* 右侧快捷键与模式切换 */
+#ctrl-side { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.ctrl-quick { display: flex; gap: 10px; }
+
+.round-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 14px;
 }
+
+.round-btn:active { background: #4a3d6b; }
+
+.ctrl-mode {
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--dim);
+}
+
+/* 触屏（粗指针）或窄屏时显示操控区 */
+@media (pointer: coarse), (max-width: 900px) {
+  #controls { display: flex; }
+}
+
+/* ───────────── 移动端紧凑布局 ───────────── */
 
 @media (max-width: 900px) {
-  .game-layout { flex-direction: column-reverse; align-items: center; }
-  .hud { width: min(92vw, 624px); }
-  #map { width: min(92vw, 78vh); height: min(92vw, 78vh); }
+  .scene { padding: 10px; align-items: flex-start; }
+
+  #scene-game.scene { padding-top: max(10px, env(safe-area-inset-top)); }
+
+  .game-layout { flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+
+  /* HUD 压缩为地图上方的紧凑面板 */
+  .hud {
+    width: min(96vw, 624px);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .hud-floor-badge { grid-column: 1 / -1; padding: 5px; font-size: 14px; }
+
+  .hud-stats { display: contents; }
+
+  .stat { flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; }
+
+  .stat dt { font-size: 11px; }
+
+  .stat dd { font-size: 15px; }
+
+  .hud-keys { grid-column: 1 / -1; }
+
+  .hud-btns { grid-column: 1 / -1; grid-template-columns: repeat(4, 1fr); }
+
+  .hud-btns button { font-size: 11px; padding: 8px 2px; }
+
+  .hud-btns button.danger { grid-column: auto; }
+
+  /* 地图尽量占满宽度，同时给操控区留出空间 */
+  #map {
+    width: min(96vw, 624px, calc(100dvh - 350px));
+    height: min(96vw, 624px, calc(100dvh - 350px));
+  }
+
+  .title-box { padding: 32px 20px; }
+
+  .title-box h1 { font-size: clamp(38px, 12vw, 56px); }
+
+  .big-btn { font-size: 16px; padding: 13px 22px; }
+}
+
+/* 极矮视口（横屏手机）：允许页面滚动查看 */
+@media (max-width: 900px) and (max-height: 560px) {
+  #map { width: min(96vw, 624px); height: min(96vw, 624px); }
 }
 
 /* ───────────── 提示条 ───────────── */
@@ -375,6 +521,22 @@ body {
 }
 
 .save-slot.dim { color: var(--dim); }
+
+/* 存档码导入/导出 */
+.code-box {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--text);
+  background: #1b1526;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  word-break: break-all;
+}
+
+.modal-btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
 /* 对话 */
 .dialog-icon { width: 64px; height: 64px; image-rendering: pixelated; margin: 0 auto; }

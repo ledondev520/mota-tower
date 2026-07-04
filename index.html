@@ -9,7 +9,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#17121f" />
   <title>魔塔 · Mota — 15 层经典数值魔塔</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23231d2e'/><rect x='4' y='2' width='8' height='12' fill='%23f4b41b'/><rect x='6' y='6' width='4' height='8' fill='%23231d2e'/></svg>" />
   <link rel="stylesheet" href="style.css" />
@@ -24,11 +25,13 @@
       <div class="title-btns">
         <button id="btn-start" class="big-btn">新的冒险</button>
         <button id="btn-continue" class="big-btn">继续冒险</button>
+        <button id="btn-import" class="big-btn ghost">导入存档</button>
       </div>
+      <p id="continue-meta" class="dim"></p>
       <div class="help">
         <p>魔王掳走了公主，囚于塔顶第 15 层。拿起剑与盾，一层层爬上去吧。</p>
-        <p class="dim">移动 方向键 / WASD　·　M 怪物手册　·　J 楼层传送　·　K 存档　L 读档　·　T 伤害预览</p>
-        <p class="dim">战斗为确定性数值：勇士先手，伤害 = 攻击 − 对方防御。量力而行，宝石优先。</p>
+        <p class="dim">键盘：方向键 / WASD 移动　·　M 手册　J 楼传　K 存档　L 读档　T 伤害预览</p>
+        <p class="dim">手机：屏幕摇杆 / 方向键操作，进度自动保存；用「存档码」可跨浏览器继续冒险。</p>
       </div>
     </div>
   </section>
@@ -55,21 +58,37 @@
           <button id="btn-fly">楼层传送 (J)</button>
           <button id="btn-save">存档 (K)</button>
           <button id="btn-load">读档 (L)</button>
+          <button id="btn-export">导出存档</button>
           <button id="btn-dmg">伤害预览:开</button>
           <button id="btn-mute">音效:开</button>
           <button id="btn-restart" class="danger">重新开始</button>
         </div>
-        <div class="dpad">
-          <button id="dpad-up">▲</button>
-          <div class="dpad-mid">
-            <button id="dpad-left">◀</button>
-            <button id="dpad-right">▶</button>
-          </div>
-          <button id="dpad-down">▼</button>
-        </div>
       </aside>
       <div id="map-wrap">
         <canvas id="map" class="pixel"></canvas>
+      </div>
+      <!-- 触屏操控区：摇杆 / 方向键 二选一（可切换），右侧快捷键 -->
+      <div id="controls">
+        <div id="ctrl-move">
+          <div id="joystick">
+            <div id="joy-ring"></div>
+            <div id="joy-thumb"></div>
+          </div>
+          <div id="dpad" class="dpad hidden">
+            <button id="dpad-up" class="pad-btn">▲</button>
+            <button id="dpad-left" class="pad-btn">◀</button>
+            <button id="dpad-center" class="pad-btn pad-dot" disabled>·</button>
+            <button id="dpad-right" class="pad-btn">▶</button>
+            <button id="dpad-down" class="pad-btn">▼</button>
+          </div>
+        </div>
+        <div id="ctrl-side">
+          <div class="ctrl-quick">
+            <button id="btn-quick-manual" class="round-btn">手册</button>
+            <button id="btn-quick-fly" class="round-btn">楼传</button>
+          </div>
+          <button id="btn-ctrl-mode" class="ctrl-mode">切换按键</button>
+        </div>
       </div>
     </div>
   </section>
@@ -88,6 +107,7 @@
 
   <script src="js/formulas.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/savecode.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/engine.js"></script>

@@ -4,6 +4,8 @@
  * Input : MOTA_DATA / MOTA_ENGINE / MOTA_SPRITES / MOTA_AUDIO，index.html 的 DOM
  * Output: 全局对象 MOTA_UI = { boot() }；接管引擎事件并驱动全部画面
  * Pos   : 表现层总装——引擎(规则)与玩家(输入/视听)之间唯一的桥。
+ *         输入三通道：键盘（桌面）、虚拟摇杆与方向键（触屏，可切换）；
+ *         存档跨浏览器迁移经「导出/导入存档码」弹窗完成。
  * 我被更新时，必须同步更新本头注释 + 所属目录 README/INDEX。
  */
 (function (root) {
@@ -24,8 +26,10 @@
   var showDamage = localStorage.getItem("mota_dmg") !== "0"; // 伤害预览开关
   var floaters = [];                   // 飘字 {x,y,text,color,t0}
   var toastTimer = null;
-  var keyHeld = {};                    // 长按连续移动
+  var keyHeld = {};                    // 键盘长按连续移动
   var moveTimer = null;
+  var ctrlMode = localStorage.getItem("mota_ctrl") || "joy"; // 触屏操控：joy 摇杆 | pad 按键
+  var MOVE_MS = 150;                   // 触屏持续移动步频
 
   // ─────────────────────────── DOM 工具 ───────────────────────────
 
@@ -212,7 +216,7 @@
     overlay.appendChild(box);
     overlay.dataset.onclose = "";
     overlay._onClose = opts && opts.onClose;
-    $("#scene-game").appendChild(overlay);
+    document.body.appendChild(overlay); // 挂 body：标题页/游戏页均可弹出
     modalStack.push(overlay);
     return overlay;
   }
@@ -476,12 +480,12 @@
   /** 职责：键盘输入（方向长按连走；功能键 M/J/D/K/L/Esc）。 */
   function bindKeyboard() {
     document.addEventListener("keydown", function (ev) {
-      if ($("#scene-game").classList.contains("hidden")) return;
-      // 弹窗打开时仅响应 Esc
+      // 弹窗打开时仅响应 Esc（任何场景下都可关闭弹窗）
       if (modalStack.length) {
         if (ev.key === "Escape") closeModal();
         return;
       }
+      if ($("#scene-game").classList.contains("hidden")) return;
       var d = DIRS[ev.key];
       if (d) {
         ev.preventDefault();
@@ -515,23 +519,204 @@
     }, 130);
   }
 
-  /** 职责：绑定屏幕方向键（触屏）。 */
-  function bindTouch() {
+  /** 职责：触屏一步移动的统一入口（弹窗打开时忽略）。 */
+  function touchStep(d) {
+    if (!d || modalStack.length) return;
+    E.moveHero(d[0], d[1]);
+  }
+
+  /**
+   * 职责：虚拟摇杆——拖拽出方向，持续按步频移动。
+   * 思路：Pointer Events 统一鼠标/触控；捕获指针后计算指心向量，
+   *       超过死区(0.28R)时吸附到四方向；方向变更立即走一步并重置节拍，
+   *       其余按 MOVE_MS 匀速连走；松手回中停止。
+   */
+  function bindJoystick() {
+    var joy = $("#joystick");
+    var thumb = $("#joy-thumb");
+    var R = 46;            // 摇杆头最大行程（px）
+    var pid = null;        // 当前捕获的指针
+    var dir = null;        // 当前方向 [dx,dy]
+    var timer = null;
+
+    /** 由指心向量解算四方向（死区内为 null）。 */
+    function solve(dx, dy) {
+      if (Math.hypot(dx, dy) < R * 0.28) return null;
+      return Math.abs(dx) > Math.abs(dy)
+        ? (dx > 0 ? [1, 0] : [-1, 0])
+        : (dy > 0 ? [0, 1] : [0, -1]);
+    }
+
+    function handle(ev) {
+      var r = joy.getBoundingClientRect();
+      var dx = ev.clientX - (r.left + r.width / 2);
+      var dy = ev.clientY - (r.top + r.height / 2);
+      var len = Math.hypot(dx, dy) || 1;
+      var cl = Math.min(len, R);
+      thumb.style.transform =
+        "translate(calc(-50% + " + (dx / len) * cl + "px), calc(-50% + " + (dy / len) * cl + "px))";
+      var nd = solve(dx, dy);
+      if (nd && (!dir || nd[0] !== dir[0] || nd[1] !== dir[1])) {
+        dir = nd;
+        touchStep(dir);            // 方向变更即时响应
+        clearInterval(timer);
+        timer = setInterval(function () { touchStep(dir); }, MOVE_MS);
+      } else if (!nd) {
+        dir = null;
+      }
+    }
+
+    function reset(ev) {
+      if (pid !== null && ev.pointerId !== pid) return;
+      pid = null; dir = null;
+      clearInterval(timer); timer = null;
+      thumb.style.transform = "translate(-50%, -50%)";
+      thumb.classList.remove("active");
+    }
+
+    joy.addEventListener("pointerdown", function (ev) {
+      ev.preventDefault();
+      try { joy.setPointerCapture(ev.pointerId); } catch (e) { /* 合成事件无真实指针 */ }
+      pid = ev.pointerId;
+      thumb.classList.add("active");
+      handle(ev);
+      if (dir && !timer) timer = setInterval(function () { touchStep(dir); }, MOVE_MS);
+    });
+    joy.addEventListener("pointermove", function (ev) {
+      if (ev.pointerId !== pid) return;
+      ev.preventDefault();
+      handle(ev);
+    });
+    joy.addEventListener("pointerup", reset);
+    joy.addEventListener("pointercancel", reset);
+  }
+
+  /** 职责：屏幕方向键——按下即走，长按连走（Pointer Events，兼容鼠标）。 */
+  function bindPad() {
     [["#dpad-up", 0, -1], ["#dpad-down", 0, 1], ["#dpad-left", -1, 0], ["#dpad-right", 1, 0]]
       .forEach(function (cfg) {
         var b = $(cfg[0]);
-        var fire = function (ev) { ev.preventDefault(); E.moveHero(cfg[1], cfg[2]); };
-        b.addEventListener("click", fire);
-        var holdTimer = null;
-        b.addEventListener("touchstart", function (ev) {
+        var d = [cfg[1], cfg[2]];
+        var timer = null;
+        var stop = function () { clearInterval(timer); timer = null; };
+        b.addEventListener("pointerdown", function (ev) {
           ev.preventDefault();
-          E.moveHero(cfg[1], cfg[2]);
-          holdTimer = setInterval(function () { E.moveHero(cfg[1], cfg[2]); }, 160);
+          try { b.setPointerCapture(ev.pointerId); } catch (e) { /* 合成事件无真实指针 */ }
+          touchStep(d);
+          stop();
+          timer = setInterval(function () { touchStep(d); }, MOVE_MS);
         });
-        ["touchend", "touchcancel"].forEach(function (t) {
-          b.addEventListener(t, function () { clearInterval(holdTimer); });
-        });
+        ["pointerup", "pointercancel"].forEach(function (t) { b.addEventListener(t, stop); });
       });
+  }
+
+  /** 职责：应用触屏操控模式（摇杆/按键二选一）并持久化。 */
+  function applyCtrlMode() {
+    $("#joystick").classList.toggle("hidden", ctrlMode !== "joy");
+    $("#dpad").classList.toggle("hidden", ctrlMode !== "pad");
+    $("#btn-ctrl-mode").textContent = ctrlMode === "joy" ? "切换按键" : "切换摇杆";
+    localStorage.setItem("mota_ctrl", ctrlMode);
+  }
+
+  /** 职责：绑定触屏操控区（摇杆 + 方向键 + 快捷键 + 模式切换）。 */
+  function bindTouch() {
+    bindJoystick();
+    bindPad();
+    $("#btn-ctrl-mode").onclick = function () {
+      ctrlMode = ctrlMode === "joy" ? "pad" : "joy";
+      applyCtrlMode();
+    };
+    $("#btn-quick-manual").onclick = openManual;
+    $("#btn-quick-fly").onclick = openFly;
+    applyCtrlMode();
+  }
+
+  // ─────────────────────────── 存档码导入/导出 ───────────────────────────
+
+  /**
+   * 职责：导出存档码弹窗——展示可复制的存档码，支持复制/下载。
+   * 思路：engine.exportSave() 异步生成压缩存档码；剪贴板 API 失败时
+   *       降级 execCommand；同时提供 .txt 下载（file:// 亦可用）。
+   */
+  function openExport() {
+    if (!E.getState()) { toast("先开始一局冒险", true); return; }
+    E.exportSave().then(function (code) {
+      openModal("导出存档（跨浏览器）", function (body) {
+        body.appendChild(el("p", "shop-greet",
+          "复制下方存档码，在任意浏览器打开游戏，从标题页「导入存档」粘贴即可继续冒险。"));
+        var ta = el("textarea", "code-box");
+        ta.value = code;
+        ta.readOnly = true;
+        ta.onclick = function () { ta.select(); };
+        body.appendChild(ta);
+        var row = el("div", "modal-btn-row");
+        var copy = el("button", "dialog-next", "复制存档码");
+        copy.onclick = function () {
+          var done = function () { toast("已复制，去其他浏览器导入吧"); };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(done, function () { fallbackCopy(ta, done); });
+          } else {
+            fallbackCopy(ta, done);
+          }
+        };
+        row.appendChild(copy);
+        var dl = el("button", "dialog-next", "下载为文件");
+        dl.onclick = function () {
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([code], { type: "text/plain" }));
+          a.download = "魔塔存档-" + new Date().toISOString().slice(0, 10) + ".txt";
+          a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        };
+        row.appendChild(dl);
+        body.appendChild(row);
+      });
+    }).catch(function (e) { toast("导出失败：" + e.message, true); });
+  }
+
+  /** 职责：剪贴板 API 不可用时的选中复制降级。 */
+  function fallbackCopy(ta, done) {
+    ta.select();
+    try { document.execCommand("copy"); done(); }
+    catch (e) { toast("请手动全选复制", true); }
+  }
+
+  /**
+   * 职责：导入存档码弹窗——粘贴或上传文件，成功后直接进入游戏。
+   */
+  function openImport() {
+    openModal("导入存档", function (body) {
+      body.appendChild(el("p", "shop-greet",
+        "粘贴其他浏览器导出的存档码（MOTA2 开头），或选择存档文件。导入成功后立即继续冒险。"));
+      var ta = el("textarea", "code-box");
+      ta.placeholder = "在此粘贴存档码…";
+      body.appendChild(ta);
+      var row = el("div", "modal-btn-row");
+      var file = el("button", "dialog-next", "选择文件");
+      var input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".txt,text/plain";
+      input.style.display = "none";
+      input.onchange = function () {
+        if (!input.files[0]) return;
+        input.files[0].text().then(function (t) { ta.value = t; });
+      };
+      body.appendChild(input);
+      file.onclick = function () { input.click(); };
+      row.appendChild(file);
+      var go = el("button", "dialog-next", "导入并继续");
+      go.onclick = function () {
+        var code = ta.value.trim();
+        if (!code) { toast("请先粘贴存档码", true); return; }
+        E.importSave(code).then(function () {
+          closeModal();
+          showScene("game");
+          A.play("stairs");
+        }).catch(function (e) { toast("导入失败：" + (e && e.message || "存档码无效"), true); });
+      };
+      row.appendChild(go);
+      body.appendChild(row);
+    });
   }
 
   /** 职责：切换地图伤害预览角标。 */
@@ -542,12 +727,13 @@
     render();
   }
 
-  /** 职责：绑定 HUD 按钮。 */
+  /** 职责：绑定 HUD 与标题页按钮。 */
   function bindButtons() {
     $("#btn-manual").onclick = openManual;
     $("#btn-fly").onclick = openFly;
     $("#btn-save").onclick = function () { openSaves("save"); };
     $("#btn-load").onclick = function () { openSaves("load"); };
+    $("#btn-export").onclick = openExport;
     $("#btn-dmg").onclick = toggleDamage;
     $("#btn-mute").onclick = function () { A.toggleMute(); renderHud(); };
     $("#btn-restart").onclick = function () {
@@ -560,16 +746,21 @@
     };
     $("#btn-start").onclick = function () { E.newGame(); showScene("game"); A.play("stairs"); };
     $("#btn-continue").onclick = function () {
-      if (E.load("auto")) showScene("game");
+      if (E.loadLatest()) showScene("game");
     };
+    $("#btn-import").onclick = openImport;
     $("#btn-end-restart").onclick = function () { E.newGame(); showScene("game"); };
     $("#btn-end-title").onclick = function () { showScene("title"); refreshTitle(); };
   }
 
-  /** 职责：刷新标题页"继续冒险"按钮可用态。 */
+  /** 职责：刷新标题页"继续冒险"可用态与最新存档摘要。 */
   function refreshTitle() {
-    var has = !E.listSaves()[0].empty;
-    $("#btn-continue").classList.toggle("locked", !has);
+    var best = E.latestSave();
+    $("#btn-continue").classList.toggle("locked", !best);
+    $("#continue-meta").textContent = best
+      ? "最新进度：第 " + best.floor + " 层 · 生命 " + best.hp +
+        " · " + new Date(best.savedAt).toLocaleString()
+      : "";
   }
 
   // ─────────────────────────── 启动 ───────────────────────────
